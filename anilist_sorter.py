@@ -3,6 +3,7 @@ import requests
 import json
 import os
 import time
+import random
 
 st.set_page_config(page_title="AniList Duell-Sorter", layout="wide")
 
@@ -290,7 +291,7 @@ tab_duel, tab_list, tab_ignored, tab_sync = st.tabs([
     "☁️ AniList Upload"
 ])
 
-# --- TAB 1: DUELL (BINÄRE SUCHE) ---
+# --- TAB 1: DUELL (ZUFÄLLIGE BINÄRE SUCHE MIT NEU WÜRFELN) ---
 with tab_duel:
     if state["current"] is None:
         if total_items == 0:
@@ -298,7 +299,12 @@ with tab_duel:
         else:
             st.success("🎉 Alle aktiven Titel sind vollständig einsortiert!")
     else:
-        mid = (state["low"] + state["high"]) // 2
+        # State für den aktuellen Zufallsgegner initialisieren, falls noch keiner da ist
+        duel_key = f"rand_mid_{username}_{media_type}_{state['current']['media_id']}_{state['low']}_{state['high']}"
+        if duel_key not in st.session_state:
+            st.session_state[duel_key] = random.randint(state["low"], state["high"])
+        
+        mid = st.session_state[duel_key]
         candidate = state["current"]
         opponent = state["ranked"][mid]
         
@@ -314,6 +320,8 @@ with tab_duel:
             st.caption(f"Romaji: {candidate['romaji']} | Format: **{candidate['format']}**")
             
             if st.button("👈 Dieser ist besser", use_container_width=True, type="primary"):
+                if duel_key in st.session_state:
+                    del st.session_state[duel_key]
                 state["high"] = mid - 1
                 if state["low"] > state["high"]:
                     state["ranked"].insert(state["low"], candidate)
@@ -322,15 +330,29 @@ with tab_duel:
                 st.rerun()
 
             if st.button(f"🚫 Titel ignorieren ({candidate['format']})", use_container_width=True):
+                if duel_key in st.session_state:
+                    del st.session_state[duel_key]
                 state["ignored"].append(candidate)
                 state["current"] = None
                 save_state(username, media_type, state)
                 st.rerun()
 
         with col_vs:
-            st.markdown("<h2 style='text-align: center; margin-top: 100px;'>VS</h2>", unsafe_allow_html=True)
-            # NEU: Button für Gleichstand direkt in der Mitte
+            st.markdown("<h2 style='text-align: center; margin-top: 60px;'>VS</h2>", unsafe_allow_html=True)
+            
+            # NEU: Button zum Neu würfeln des Gegners
+            if st.button("🎲 Neu würfeln", use_container_width=True, help="Wählt einen anderen zufälligen Gegner aus dem aktuellen Suchbereich."):
+                # Neuen zufälligen Index bestimmen (der sich vom aktuellen unterscheidet, falls möglich)
+                new_mid = random.randint(state["low"], state["high"])
+                if new_mid == mid and state["high"] > state["low"]:
+                    new_mid = state["high"] if mid != state["high"] else state["low"]
+                st.session_state[duel_key] = new_mid
+                st.rerun()
+
+            st.write("")
             if st.button("🤝 Beide gleich gut", use_container_width=True, help="Setzt den neuen Titel direkt auf denselben Platz wie den Gegner."):
+                if duel_key in st.session_state:
+                    del st.session_state[duel_key]
                 state["ranked"].insert(mid, candidate)
                 state["current"] = None
                 save_state(username, media_type, state)
@@ -343,6 +365,8 @@ with tab_duel:
             st.caption(f"Romaji: {opponent['romaji']} | Format: **{opponent['format']}**")
             
             if st.button("Dieser ist besser 👉", use_container_width=True, type="primary"):
+                if duel_key in st.session_state:
+                    del st.session_state[duel_key]
                 state["low"] = mid + 1
                 if state["low"] > state["high"]:
                     state["ranked"].insert(state["low"], candidate)
@@ -351,6 +375,8 @@ with tab_duel:
                 st.rerun()
 
             if st.button(f"🗑️ Gegner aus Rangliste ignorieren ({opponent['format']})", use_container_width=True):
+                if duel_key in st.session_state:
+                    del st.session_state[duel_key]
                 removed = state["ranked"].pop(mid)
                 state["ignored"].append(removed)
                 for k, v in state["anchors"].items():
@@ -414,7 +440,7 @@ with tab_list:
 
         if (idx_90 != -1 and idx_75 != -1 and idx_75 <= idx_90) or \
            (idx_75 != -1 and idx_50 != -1 and idx_50 <= idx_75) or \
-           (idx_90 != -1 and idx_50 != -1 and idx_50 <= idx_90):
+           (idx_90 != -1 and idx_50 != -1 and idx_90 <= idx_90):
             st.warning(
                 "⚠️ **Achtung:** Deine Anker-Reihenfolge widerspricht deiner Rangliste "
                 "(z. B. ist dein 75er-Anker höher platziert als dein 90er-Anker). "
