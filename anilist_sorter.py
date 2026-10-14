@@ -194,7 +194,6 @@ config = load_config()
 st.sidebar.title("⚙️ Einstellungen")
 username_input = st.sidebar.text_input("AniList Username", value=config.get("username", ""))
 
-# Wenn sich der Username ändert, direkt in data/config.json speichern
 if username_input.strip() != config.get("username", ""):
     save_config(username_input, config.get("token", ""))
     config["username"] = username_input.strip()
@@ -207,7 +206,6 @@ min_score = st.sidebar.slider(
     help="Bestimmt die Punktzahl für den allerletzten Platz deiner Liste."
 )
 
-# Format-Filter für Anime / Manga
 st.sidebar.divider()
 st.sidebar.subheader("🚫 Format-Filter")
 if media_type == "ANIME":
@@ -236,20 +234,17 @@ if state_key not in st.session_state:
 
 state = st.session_state[state_key]
 
-# Automatischer Erst-Abruf, falls noch keine JSON-Datei für diesen User existiert
 if not db_exists and not state["ranked"] and not state["unranked"] and not state["ignored"] and state["current"] is None:
     with st.spinner(f"Erster Start: Lade abgeschlossene {media_type} für {username} von AniList..."):
         added_u, added_i = sync_with_anilist(username, media_type, state, auto_ignore_formats)
         st.toast(f"{added_u} Titel geladen ({added_i} OVAs/Specials automatisch ignoriert)!", icon="✅")
 
-# Manueller Sync-Button mit AniList
 if st.sidebar.button("🔄 Neue abgeschlossene Titel laden", use_container_width=True):
     with st.spinner(f"Lade {media_type} für {username} von AniList..."):
         added_unranked, added_ignored = sync_with_anilist(username, media_type, state, auto_ignore_formats)
         st.sidebar.success(f"{added_unranked} neue Titel geladen ({added_ignored} automatisch ignoriert)!")
         st.rerun()
 
-# Bulk-Button: Bereits geladene OVAs/Specials nachträglich aus der Warteschlange filtern
 if auto_ignore_formats and st.sidebar.button("🧹 Warteschlange nach Formaten bereinigen", use_container_width=True):
     moved_count = 0
     remaining_unranked = []
@@ -270,7 +265,6 @@ if auto_ignore_formats and st.sidebar.button("🧹 Warteschlange nach Formaten b
     st.sidebar.info(f"{moved_count} Titel aus der Warteschlange ignoriert.")
     st.rerun()
 
-# Nächstes Element für die Binäre Suche vorbereiten
 if state["current"] is None and len(state["unranked"]) > 0:
     if len(state["ranked"]) == 0:
         state["ranked"].append(state["unranked"].pop(0))
@@ -281,7 +275,6 @@ if state["current"] is None and len(state["unranked"]) > 0:
         state["high"] = len(state["ranked"]) - 1
     save_state(username, media_type, state)
 
-# Fortschrittsanzeige
 total_items = len(state["ranked"]) + len(state["unranked"]) + (1 if state["current"] else 0)
 ranked_count = len(state["ranked"])
 ignored_count = len(state["ignored"])
@@ -335,7 +328,13 @@ with tab_duel:
                 st.rerun()
 
         with col_vs:
-            st.markdown("<h1 style='text-align: center; margin-top: 150px;'>VS</h1>", unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center; margin-top: 100px;'>VS</h2>", unsafe_allow_html=True)
+            # NEU: Button für Gleichstand direkt in der Mitte
+            if st.button("🤝 Beide gleich gut", use_container_width=True, help="Setzt den neuen Titel direkt auf denselben Platz wie den Gegner."):
+                state["ranked"].insert(mid, candidate)
+                state["current"] = None
+                save_state(username, media_type, state)
+                st.rerun()
 
         with col2:
             st.subheader(f"🛡️ Aktuell Platz #{mid + 1}")
